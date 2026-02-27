@@ -25,13 +25,14 @@ app.get('/debug-portal', async (req, res) => {
     await page.fill('input[name="pass"]', TRAVELGEA_PASS);
     await page.click('button[type="submit"]');
     await page.waitForTimeout(4000);
-    await page.goto('https://online.travelgea.com.ar/es', { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await page.waitForTimeout(5000);
+    await page.goto('https://online.travelgea.com.ar/es', { waitUntil: 'networkidle', timeout: 40000 });
+    await page.waitForTimeout(8000);
     const html = await page.content();
     await browser.close();
-    // Buscar inputs en el HTML
     const inputs = html.match(/<input[^>]{0,200}>/g) || [];
-    res.json({ url: page.url(), inputs: inputs.slice(0, 20) });
+    const selects = html.match(/<select[^>]{0,200}>/g) || [];
+    const bodySnippet = html.substring(html.indexOf('<body'), html.indexOf('<body') + 5000);
+    res.json({ url: page.url(), inputs: inputs.slice(0, 20), selects: selects.slice(0, 10), bodySnippet });
   } catch(e) { res.json({ error: e.message }); }
 });
 
