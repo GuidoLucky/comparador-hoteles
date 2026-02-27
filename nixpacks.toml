@@ -5,7 +5,9 @@ nixPkgs = ["nodejs_20"]
 cmds = [
   "npm install",
   "npx playwright install chromium",
-  "npx playwright install-deps chromium"
+  "npx playwright install-deps chromium",
+  "find /root/.cache/ms-playwright -name 'chrome' -o -name 'chromium' 2>/dev/null | head -10 || echo 'No chromium binary found'",
+  "ls /root/.cache/ms-playwright/ 2>/dev/null || echo 'No ms-playwright cache'"
 ]
 
 [start]
