@@ -1,8 +1,8 @@
 [phases.setup]
-nixPkgs = ["nodejs_20", "chromium", "nss", "at-spi2-atk", "atk", "cups", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXext", "xorg.libXrandr", "xorg.libXfixes", "xorg.libXi", "xorg.libXtst", "mesa", "libgbm", "alsa-lib", "pango", "cairo", "glib", "dbus", "expat", "nspr"]
+nixPkgs = ["nodejs_20", "chromium"]
 
 [phases.install]
-cmds = ["npm install", "PLAYWRIGHT_BROWSERS_PATH=/ms-playwright npx playwright install chromium --with-deps"]
+cmds = ["npm install"]
 
 [start]
-cmd = "PLAYWRIGHT_BROWSERS_PATH=/ms-playwright npm start"
+cmd = "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=$(which chromium) npm start"
