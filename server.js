@@ -1,5 +1,5 @@
 const express = require('express');
-const { chromium } = require('playwright-core');
+const { chromium } = require('playwright');
 const path = require('path');
 const { execSync } = require('child_process');
 
@@ -16,28 +16,9 @@ const TRAVELGEA_PASS = process.env.TRAVELGEA_PASS;
 
 // Detectar Chromium del sistema
 function getChromiumPath() {
-  const paths = [
-    '/usr/bin/chromium',
-    '/usr/bin/chromium-browser',
-    '/usr/bin/google-chrome',
-    '/nix/store',
-  ];
-  for (const p of paths) {
-    try {
-      if (p === '/nix/store') {
-        const result = execSync('find /nix/store -name "chromium" -type f 2>/dev/null | head -1').toString().trim();
-        if (result) return result;
-      } else {
-        execSync(`test -f ${p}`);
-        return p;
-      }
-    } catch {}
-  }
-  // Último recurso
-  try {
-    return execSync('which chromium || which chromium-browser || which google-chrome').toString().trim();
-  } catch {}
-  return null;
+  // Playwright instala en esta ruta por defecto
+  const playwrightPath = require('playwright').chromium.executablePath();
+  return playwrightPath;
 }
 
 const CHROMIUM_PATH = getChromiumPath();
