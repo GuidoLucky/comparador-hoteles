@@ -1,5 +1,5 @@
 const express = require('express');
-const { chromium } = require('playwright-core');
+const puppeteer = require('puppeteer');
 const path = require('path');
 
 const app = express();
@@ -36,25 +36,27 @@ app.post('/buscar', async (req, res) => {
   res.json({ ok: true, resultados: combinarResultados(tucano, travelgea) });
 });
 
+function getBrowser() {
+  return puppeteer.launch({
+    headless: 'new',
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage', '--disable-gpu']
+  });
+}
+
 // ─── BOT TUCANO ───
 async function buscarTucano(destino, entrada, noches, adultos) {
   console.log('[Tucano] Iniciando...');
-  const browser = await chromium.launch({
-    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-  });
-  const page = await (await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
-  })).newPage();
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36');
 
   try {
-    // 1. Login tucanotours.com.ar
+    // 1. Login
     console.log('[Tucano] Login...');
     await page.goto('https://www.tucanotours.com.ar/index.php', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(2000);
-    await page.fill('input[name="usuario"]', TUCANO_USER);
-    await page.fill('input[name="password"]', TUCANO_PASS);
+    await page.type('input[name="usuario"]', TUCANO_USER, { delay: 50 });
+    await page.type('input[name="password"]', TUCANO_PASS, { delay: 50 });
     await Promise.all([
       page.waitForNavigation({ timeout: 15000 }).catch(() => {}),
       page.click('button[type="submit"], input[type="submit"]')
@@ -70,59 +72,58 @@ async function buscarTucano(destino, entrada, noches, adultos) {
     // 3. Si pide login en PriceNavigator
     if (page.url().includes('login')) {
       console.log('[Tucano] Login PriceNavigator...');
-      await page.fill('input[name="username"], input[type="email"]', TUCANO_USER);
-      await page.fill('input[type="password"]', TUCANO_PASS);
+      await page.type('input[name="username"], input[type="email"]', TUCANO_USER, { delay: 50 });
+      await page.type('input[type="password"]', TUCANO_PASS, { delay: 50 });
       await page.click('button[type="submit"]');
       await page.waitForTimeout(3000);
     }
 
-    // 4. Click en tab Hoteles
-    await page.click('a[href*="hotel"], li:has-text("Hoteles"), .nav-item:has-text("Hoteles")').catch(() => {});
+    // 4. Click tab Hoteles
+    await page.click('a[href*="hotel"], li:has(a:has-text("Hoteles"))').catch(() => {});
     await page.waitForTimeout(1500);
 
-    // 5. Autocomplete destino — selector exacto de jQuery UI
-    const inputDestino = page.locator('input.ui-autocomplete-input, input[placeholder*="ciudad"], input[placeholder*="hotel"]').first();
-    await inputDestino.click();
-    await inputDestino.fill('');
-    await inputDestino.type(destino, { delay: 80 });
-    console.log('[Tucano] Escribiendo destino, esperando sugerencias...');
+    // 5. Autocomplete destino
+    const inputSelector = 'input.ui-autocomplete-input';
+    await page.waitForSelector(inputSelector, { timeout: 10000 });
+    await page.click(inputSelector);
+    await page.keyboard.down('Control');
+    await page.keyboard.press('A');
+    await page.keyboard.up('Control');
+    await page.keyboard.press('Backspace');
+    await page.type(inputSelector, destino, { delay: 100 });
+    console.log('[Tucano] Esperando sugerencias autocomplete...');
 
-    // 6. Esperar que aparezca el autocomplete ul#ui-id-1
-    await page.waitForSelector('ul.ui-autocomplete.ui-front li.ui-menu-item', { timeout: 8000 });
+    // 6. Esperar sugerencias jQuery UI
+    await page.waitForSelector('ul.ui-autocomplete li.ui-menu-item', { timeout: 8000 });
     await page.waitForTimeout(500);
-
-    // 7. Click en primera sugerencia visible
-    const sugerencias = page.locator('ul.ui-autocomplete.ui-front li.ui-menu-item');
-    const count = await sugerencias.count();
-    console.log('[Tucano] Sugerencias encontradas:', count);
-    if (count > 0) {
-      await sugerencias.first().click();
+    const items = await page.$$('ul.ui-autocomplete li.ui-menu-item');
+    console.log('[Tucano] Sugerencias:', items.length);
+    if (items.length > 0) {
+      await items[0].click();
       await page.waitForTimeout(800);
     }
 
-    // 8. Fecha entrada
+    // 7. Fecha
     const [yyyy, mm, dd] = entrada.split('-');
-    await page.fill('input[placeholder="Entrada"], input[name*="entrada"]', `${dd}/${mm}/${yyyy}`).catch(() => {});
+    await page.$eval('input[placeholder="Entrada"]', (el, val) => { el.value = val; el.dispatchEvent(new Event('change')); }, `${dd}/${mm}/${yyyy}`).catch(() => {});
     await page.waitForTimeout(400);
 
-    // 9. Noches
-    await page.fill('input[placeholder="Noches"], input[name*="noches"]', String(noches)).catch(() => {});
+    // 8. Noches
+    await page.$eval('input[placeholder="Noches"]', (el, val) => { el.value = val; el.dispatchEvent(new Event('change')); }, String(noches)).catch(() => {});
     await page.waitForTimeout(400);
 
-    // 10. Buscar
+    // 9. Buscar
     await page.click('button:has-text("Buscar")');
-    await page.waitForTimeout(6000);
-    console.log('[Tucano] Resultados URL:', page.url());
+    await page.waitForTimeout(7000);
+    console.log('[Tucano] URL resultados:', page.url());
 
     const resultados = await extraerTucano(page);
-    console.log('[Tucano] Hoteles:', resultados.length);
+    console.log('[Tucano] Hoteles encontrados:', resultados.length);
     await browser.close();
     return resultados;
 
   } catch (err) {
     console.error('[Tucano] Error:', err.message);
-    // Screenshot para debug
-    await page.screenshot({ path: '/tmp/tucano-error.png' }).catch(() => {});
     await browser.close();
     return [];
   }
@@ -131,25 +132,23 @@ async function buscarTucano(destino, entrada, noches, adultos) {
 async function extraerTucano(page) {
   return await page.evaluate(() => {
     const hoteles = [];
-    // PriceNavigator muestra hotel con clase hotel-card o similar
-    const cards = document.querySelectorAll('[class*="hotel-card"], [class*="hotel-item"], [class*="property"]');
-    console.log('Tucano: cards encontradas =', cards.length);
+    const cards = document.querySelectorAll('[class*="hotel-card"], [class*="hotel-item"], [class*="property"], [class*="result"]');
+    console.log('Tucano cards:', cards.length);
 
     cards.forEach(card => {
       const nombre = card.querySelector('h2, h3, [class*="hotel-name"], [class*="name"]')?.textContent?.trim();
       const habitaciones = [];
 
-      card.querySelectorAll('[class*="room"], [class*="tariff"], [class*="rate"], [class*="hab"]').forEach(row => {
-        const nombreHab = row.querySelector('[class*="name"], [class*="type"], [class*="room-type"]')?.textContent?.trim();
+      card.querySelectorAll('[class*="room"], [class*="tariff"], [class*="rate"]').forEach(row => {
+        const nombreHab = row.querySelector('[class*="name"], [class*="type"]')?.textContent?.trim();
         const regimen = row.querySelector('[class*="regime"], [class*="board"], a')?.textContent?.trim() || 'Todo incluido';
-        const precioText = (row.querySelector('[class*="price"], [class*="amount"], [class*="total"]')?.textContent || '').replace(/[^0-9.,]/g, '').replace(',', '.');
+        const precioText = (row.querySelector('[class*="price"], [class*="amount"]')?.textContent || '').replace(/[^0-9.,]/g, '').replace(',', '.');
         const precio = parseFloat(precioText);
         if (nombreHab && !isNaN(precio) && precio > 0) {
           habitaciones.push({ nombre: nombreHab, regimen, precioTotal: precio, reembolsable: row.textContent.includes('eembolsable') });
         }
       });
 
-      // Fallback precio general
       if (!habitaciones.length) {
         const p = parseFloat((card.querySelector('[class*="price"], [class*="amount"]')?.textContent || '').replace(/[^0-9.,]/g, '').replace(',', '.'));
         if (p > 0) habitaciones.push({ nombre: 'Habitación disponible', regimen: 'Consultar', precioTotal: p, reembolsable: false });
@@ -164,69 +163,65 @@ async function extraerTucano(page) {
 // ─── BOT TRAVELGEA ───
 async function buscarTravelgea(destino, entrada, noches, adultos) {
   console.log('[Travelgea] Iniciando...');
-  const browser = await chromium.launch({
-    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
-  });
-  const page = await (await browser.newContext({
-    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
-  })).newPage();
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  await page.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36');
 
   try {
     // 1. Login intranet
-    console.log('[Travelgea] Login intranet...');
+    console.log('[Travelgea] Login...');
     await page.goto('https://intranet.grupogea.la/', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(3000);
 
-    await page.fill('input[type="email"], input[name="email"], input[placeholder*="mail"], input[placeholder*="suar"]', TRAVELGEA_USER);
-    await page.fill('input[type="password"]', TRAVELGEA_PASS);
-    await page.click('button[type="submit"], button:has-text("Ingresar"), button:has-text("Iniciar")');
+    await page.type('input[type="email"], input[name="email"]', TRAVELGEA_USER, { delay: 50 });
+    await page.type('input[type="password"]', TRAVELGEA_PASS, { delay: 50 });
+    await page.click('button[type="submit"]');
     await page.waitForTimeout(4000);
     console.log('[Travelgea] Post-login:', page.url());
 
-    // 2. Ir a online.travelgea
+    // 2. Portal
     await page.goto('https://online.travelgea.com.ar/es', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(3000);
     console.log('[Travelgea] Portal:', page.url());
 
-    // 3. Autocomplete destino — mismo sistema jQuery UI
-    const inputDestino = page.locator('input.ui-autocomplete-input, input[placeholder*="Destino"], input[placeholder*="hotel"]').first();
-    await inputDestino.click();
-    await inputDestino.fill('');
-    await inputDestino.type(destino, { delay: 80 });
-    console.log('[Travelgea] Escribiendo destino, esperando sugerencias...');
+    // 3. Autocomplete destino
+    const inputSelector = 'input.ui-autocomplete-input, input[placeholder*="Destino"]';
+    await page.waitForSelector(inputSelector, { timeout: 10000 });
+    await page.click(inputSelector);
+    await page.type(inputSelector, destino, { delay: 100 });
+    console.log('[Travelgea] Esperando sugerencias...');
 
-    // 4. Esperar ul.ui-autocomplete li.ui-menu-item
     await page.waitForSelector('ul.ui-autocomplete li.ui-menu-item', { timeout: 8000 });
     await page.waitForTimeout(500);
-
-    const sugerencias = page.locator('ul.ui-autocomplete li.ui-menu-item');
-    const count = await sugerencias.count();
-    console.log('[Travelgea] Sugerencias:', count);
-    if (count > 0) {
-      await sugerencias.first().click();
+    const items = await page.$$('ul.ui-autocomplete li.ui-menu-item');
+    console.log('[Travelgea] Sugerencias:', items.length);
+    if (items.length > 0) {
+      await items[0].click();
       await page.waitForTimeout(800);
     }
 
-    // 5. Fecha llegada (formato dd-mm-yyyy)
+    // 4. Fecha
     const [yyyy, mm, dd] = entrada.split('-');
-    const llegada = `${dd}-${mm}-${yyyy}`;
-    await page.fill('input[placeholder*="Llegada"], input[name*="llegada"], input[name*="checkin"]', llegada).catch(() => {});
+    await page.$eval('input[placeholder*="Llegada"], input[name*="llegada"]', (el, val) => {
+      el.value = val; el.dispatchEvent(new Event('change')); el.dispatchEvent(new Event('input'));
+    }, `${dd}-${mm}-${yyyy}`).catch(() => {});
     await page.waitForTimeout(400);
 
-    // 6. Noches (select)
-    await page.selectOption('select', String(noches)).catch(async () => {
-      await page.fill('input[placeholder*="Noches"]', String(noches)).catch(() => {});
+    // 5. Noches (select)
+    await page.select('select', String(noches)).catch(async () => {
+      await page.type('input[placeholder*="Noches"]', String(noches)).catch(() => {});
     });
 
-    // 7. Adultos
-    await page.selectOption('select[name*="adulto"], select:nth-of-type(2)', String(adultos)).catch(() => {});
+    // 6. Adultos
+    const selects = await page.$$('select');
+    if (selects.length >= 2) {
+      await page.select(selects[1], String(adultos)).catch(() => {});
+    }
 
-    // 8. Buscar
+    // 7. Buscar
     await page.click('button:has-text("Buscar"), input[value="Buscar"]');
     await page.waitForTimeout(7000);
-    console.log('[Travelgea] Resultados URL:', page.url());
+    console.log('[Travelgea] URL resultados:', page.url());
 
     const resultados = await extraerTravelgea(page);
     console.log('[Travelgea] Hoteles:', resultados.length);
@@ -235,7 +230,6 @@ async function buscarTravelgea(destino, entrada, noches, adultos) {
 
   } catch (err) {
     console.error('[Travelgea] Error:', err.message);
-    await page.screenshot({ path: '/tmp/travelgea-error.png' }).catch(() => {});
     await browser.close();
     return [];
   }
@@ -250,9 +244,8 @@ async function extraerTravelgea(page) {
       const nombre = card.querySelector('h2, h3, [class*="name"], [class*="title"]')?.textContent?.trim();
       const habitaciones = [];
 
-      card.querySelectorAll('[class*="room"], [class*="option"], [class*="tarif"], [class*="rate"]').forEach(row => {
+      card.querySelectorAll('[class*="room"], [class*="option"], [class*="tarif"]').forEach(row => {
         const texto = row.textContent || '';
-        // "1 x Spa Premium, Todo incluido ... Precio USD 1,621.58"
         const tipoMatch = texto.match(/\d+\s*x\s*(.+?)(?:,|Todo|Refund)/);
         const tipo = tipoMatch ? tipoMatch[1].trim() : null;
         const regimen = row.querySelector('a')?.textContent?.trim() || 'Todo incluido';
@@ -263,11 +256,10 @@ async function extraerTravelgea(page) {
         }
       });
 
-      // Fallback
       if (!habitaciones.length) {
         const precioMatch = card.textContent?.match(/USD\s*([\d,. ]+)/);
         const precio = precioMatch ? parseFloat(precioMatch[1].replace(/[, ]/g, '')) : null;
-        if (precio > 0) habitaciones.push({ nombre: 'Habitación disponible', regimen: 'Consultar', precioTotal: precio, reembolsable: false });
+        if (precio && precio > 0) habitaciones.push({ nombre: 'Habitación disponible', regimen: 'Consultar', precioTotal: precio, reembolsable: false });
       }
 
       if (nombre && habitaciones.length) hoteles.push({ hotel: nombre, estrellas: 5, habitaciones });
