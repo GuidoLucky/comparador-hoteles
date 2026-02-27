@@ -236,7 +236,6 @@ function combinarResultados(tucano, travelgea) {
 }
 
 // Dar permisos de ejecución al binario de Chromium al arrancar
-const { execSync } = require('child_process');
 try {
   execSync('chmod +x /root/.cache/ms-playwright/chromium-1208/chrome-linux64/chrome');
   console.log('✅ Permisos de Chromium configurados');
