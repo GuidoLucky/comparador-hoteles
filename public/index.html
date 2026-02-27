@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Comparador de Hoteles — Lucky Tour</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --navy: #0f1e35;
+    --navy-light: #162844;
+    --gold: #c9a84c;
+    --gold-light: #e8c97a;
+    --cream: #f7f3ec;
+    --white: #ffffff;
+    --green: #2e7d5a;
+    --green-light: #3da373;
+    --red: #c0392b;
+    --gray: #8a9ab0;
+    --border: rgba(201,168,76,0.2);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--navy);
+    color: var(--white);
+    min-height: 100vh;
+  }
+
+  /* HEADER */
+  header {
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-light) 100%);
+    border-bottom: 1px solid var(--border);
+    padding: 18px 32px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .logo-icon {
+    width: 42px; height: 42px;
+    background: var(--gold);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+
+  .logo-text {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--white);
+    letter-spacing: 0.3px;
+  }
+
+  .logo-sub {
+    font-size: 11px;
+    color: var(--gold);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    font-weight: 500;
+  }
+
+  /* MAIN LAYOUT */
+  .container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 36px 24px;
+  }
+
+  /* SEARCH CARD */
+  .search-card {
+    background: var(--navy-light);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px 32px;
+    margin-bottom: 32px;
+  }
+
+  .search-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    color: var(--gold);
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .search-grid {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr 1fr 1fr;
+    gap: 14px;
+    align-items: end;
+  }
+
+  @media (max-width: 768px) {
+    .search-grid { grid-template-columns: 1fr 1fr; }
+    .search-grid .full { grid-column: 1 / -1; }
+  }
+
+  .field-group { display: flex; flex-direction: column; gap: 6px; }
+
+  label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: var(--gray);
+    font-weight: 500;
+  }
+
+  input, select {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 8px;
+    padding: 11px 14px;
+    color: var(--white);
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    transition: border-color 0.2s;
+    outline: none;
+    width: 100%;
+  }
+
+  input:focus, select:focus {
+    border-color: var(--gold);
+    background: rgba(201,168,76,0.07);
+  }
+
+  input::placeholder { color: var(--gray); }
+
+  select option { background: var(--navy); }
+
+  .btn-search {
+    background: var(--gold);
+    color: var(--navy);
+    border: none;
+    border-radius: 8px;
+    padding: 12px 24px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+    letter-spacing: 0.3px;
+  }
+
+  .btn-search:hover { background: var(--gold-light); transform: translateY(-1px); }
+  .btn-search:active { transform: translateY(0); }
+
+  /* PROVIDER BADGES */
+  .providers-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .provider-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
+    border: 1px solid;
+  }
+
+  .provider-badge.tucano { border-color: rgba(201,168,76,0.4); color: var(--gold); background: rgba(201,168,76,0.08); }
+  .provider-badge.travelgea { border-color: rgba(46,125,90,0.4); color: var(--green-light); background: rgba(46,125,90,0.08); }
+  .provider-badge.tbo { border-color: rgba(138,154,176,0.3); color: var(--gray); background: rgba(138,154,176,0.06); }
+
+  .dot { width: 7px; height: 7px; border-radius: 50%; }
+  .dot.active { background: currentColor; }
+  .dot.pending { background: var(--gray); }
+
+  .badge-pending { font-size: 10px; opacity: 0.6; }
+
+  /* LOADING */
+  .loading {
+    display: none;
+    text-align: center;
+    padding: 48px;
+  }
+
+  .loading.visible { display: block; }
+
+  .spinner {
+    width: 44px; height: 44px;
+    border: 3px solid rgba(201,168,76,0.2);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 16px;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .loading-text {
+    color: var(--gray);
+    font-size: 14px;
+  }
+
+  .loading-steps {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .loading-step {
+    font-size: 12px;
+    color: var(--gray);
+    opacity: 0;
+    transition: opacity 0.4s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .loading-step.active { opacity: 1; color: var(--gold); }
+  .loading-step.done { opacity: 0.5; color: var(--green-light); }
+
+  /* RESULTS */
+  .results { display: none; }
+  .results.visible { display: block; }
+
+  .results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: gap;
+    gap: 12px;
+  }
+
+  .results-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+  }
+
+  .results-meta {
+    font-size: 13px;
+    color: var(--gray);
+    margin-top: 2px;
+  }
+
+  .hotel-card {
+    background: var(--navy-light);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    margin-bottom: 16px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+  }
+
+  .hotel-card:hover { border-color: rgba(201,168,76,0.4); }
+
+  .hotel-header {
+    padding: 20px 24px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .hotel-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 600;
+    margin-bottom: 4px;
+  }
+
+  .hotel-stars { color: var(--gold); font-size: 13px; letter-spacing: 1px; }
+
+  .hotel-location {
+    font-size: 12px;
+    color: var(--gray);
+    margin-top: 3px;
+  }
+
+  .hotel-best-price {
+    text-align: right;
+  }
+
+  .best-price-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--gray);
+    margin-bottom: 2px;
+  }
+
+  .best-price-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 26px;
+    color: var(--green-light);
+    font-weight: 600;
+  }
+
+  .best-price-per {
+    font-size: 12px;
+    color: var(--gray);
+  }
+
+  /* ROOMS TABLE */
+  .rooms-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  .rooms-table th {
+    padding: 10px 16px;
+    text-align: left;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--gray);
+    background: rgba(0,0,0,0.15);
+    font-weight: 500;
+  }
+
+  .rooms-table th:last-child { text-align: right; }
+
+  .rooms-table td {
+    padding: 13px 16px;
+    font-size: 13px;
+    border-top: 1px solid rgba(255,255,255,0.04);
+    vertical-align: middle;
+  }
+
+  .rooms-table tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .room-name { font-weight: 500; }
+  .room-regime {
+    font-size: 11px;
+    color: var(--gold);
+    margin-top: 2px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .provider-tag {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  .provider-tag.tucano { background: rgba(201,168,76,0.12); color: var(--gold); }
+  .provider-tag.travelgea { background: rgba(46,125,90,0.12); color: var(--green-light); }
+  .provider-tag.tbo { background: rgba(138,154,176,0.1); color: var(--gray); }
+
+  .price-neto {
+    text-align: right;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--white);
+  }
+
+  .price-original {
+    text-align: right;
+    font-size: 11px;
+    color: var(--gray);
+    text-decoration: line-through;
+    margin-top: 1px;
+  }
+
+  .cheapest-row td { background: rgba(46,125,90,0.06); }
+  .cheapest-row td:first-child { border-left: 3px solid var(--green-light); padding-left: 13px; }
+
+  .cheapest-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(46,125,90,0.15);
+    color: var(--green-light);
+    border-radius: 4px;
+    padding: 2px 7px;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-left: 8px;
+    vertical-align: middle;
+  }
+
+  /* BUDGET BUTTON */
+  .budget-row {
+    padding: 16px 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .btn-presupuesto {
+    background: transparent;
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    border-radius: 7px;
+    padding: 9px 18px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .btn-presupuesto:hover {
+    background: var(--gold);
+    color: var(--navy);
+  }
+
+  /* EMPTY STATE */
+  .empty-state {
+    text-align: center;
+    padding: 64px 24px;
+    color: var(--gray);
+  }
+
+  .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.4; }
+  .empty-text { font-size: 16px; margin-bottom: 8px; }
+  .empty-sub { font-size: 13px; opacity: 0.7; }
+
+  /* MARKUP MODAL */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .modal-overlay.visible { display: flex; }
+
+  .modal {
+    background: var(--navy-light);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 32px;
+    width: 90%;
+    max-width: 480px;
+    animation: slideUp 0.25s ease;
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .modal-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    margin-bottom: 8px;
+  }
+
+  .modal-sub {
+    font-size: 13px;
+    color: var(--gray);
+    margin-bottom: 24px;
+  }
+
+  .modal-hotel-name {
+    font-weight: 600;
+    color: var(--gold);
+  }
+
+  .modal-field {
+    margin-bottom: 16px;
+  }
+
+  .markup-display {
+    background: rgba(201,168,76,0.08);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px 16px;
+    margin: 16px 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .markup-display .label { font-size: 13px; color: var(--gray); }
+  .markup-display .value { font-size: 18px; font-weight: 600; color: var(--gold); }
+
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 24px;
+  }
+
+  .btn-cancel {
+    flex: 1;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.12);
+    color: var(--gray);
+    border-radius: 8px;
+    padding: 11px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-cancel:hover { border-color: var(--gray); color: var(--white); }
+
+  .btn-generar {
+    flex: 2;
+    background: var(--gold);
+    border: none;
+    color: var(--navy);
+    border-radius: 8px;
+    padding: 11px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+
+  .btn-generar:hover { background: var(--gold-light); }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--green);
+    color: white;
+    padding: 12px 20px;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    transform: translateY(80px);
+    opacity: 0;
+    transition: all 0.3s;
+    z-index: 200;
+  }
+
+  .toast.visible {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  /* CHIPS */
+  .info-chips {
+    display: flex;
+    gap: 8px;
+    margin-top: 8px;
+    flex-wrap: wrap;
+  }
+
+  .chip {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 20px;
+    padding: 4px 12px;
+    font-size: 12px;
+    color: var(--gray);
+  }
+
+  .refundable { color: var(--green-light); font-size: 11px; margin-top: 2px; }
+
+  hr.divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 8px 0;
+  }
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-icon">✈</div>
+  <div>
+    <div class="logo-text">Lucky Tour</div>
+    <div class="logo-sub">Comparador de Hoteles</div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- SEARCH -->
+  <div class="search-card">
+    <div class="search-title">🔍 Nueva búsqueda</div>
+    <div class="search-grid">
+      <div class="field-group full">
+        <label>Destino / Hotel</label>
+        <input type="text" id="destino" placeholder="Ej: Iberostar Praia do Forte, Punta Cana..." />
+      </div>
+      <div class="field-group">
+        <label>Entrada</label>
+        <input type="date" id="entrada" />
+      </div>
+      <div class="field-group">
+        <label>Noches</label>
+        <select id="noches">
+          <option>1</option><option>2</option><option>3</option>
+          <option>4</option><option>5</option><option>6</option>
+          <option selected>7</option><option>8</option><option>9</option>
+          <option>10</option><option>14</option><option>21</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>Adultos</label>
+        <select id="adultos">
+          <option>1</option><option selected>2</option><option>3</option><option>4</option>
+        </select>
+      </div>
+      <div class="field-group">
+        <label>&nbsp;</label>
+        <button class="btn-search" onclick="buscar()">
+          <span>⚡</span> Buscar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PROVIDERS STATUS -->
+  <div class="providers-row">
+    <div class="provider-badge tucano">
+      <div class="dot active"></div>
+      Tucano Tours <span style="font-weight:300;margin-left:2px">−17%</span>
+    </div>
+    <div class="provider-badge travelgea">
+      <div class="dot active"></div>
+      Travelgea <span style="font-weight:300;margin-left:2px">−12%</span>
+    </div>
+    <div class="provider-badge tbo">
+      <div class="dot pending"></div>
+      TBO <span class="badge-pending">— próximamente</span>
+    </div>
+  </div>
+
+  <!-- LOADING -->
+  <div class="loading" id="loading">
+    <div class="spinner"></div>
+    <div class="loading-text">Consultando proveedores...</div>
+    <div class="loading-steps">
+      <div class="loading-step" id="step1">🔄 Conectando con Tucano Tours...</div>
+      <div class="loading-step" id="step2">🔄 Conectando con Travelgea...</div>
+      <div class="loading-step" id="step3">✅ Calculando precios netos...</div>
+    </div>
+  </div>
+
+  <!-- EMPTY STATE -->
+  <div class="empty-state" id="emptyState">
+    <div class="empty-icon">🏨</div>
+    <div class="empty-text">Ingresá un destino y fechas para comparar</div>
+    <div class="empty-sub">Se consultarán Tucano y Travelgea en simultáneo</div>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="results" id="results">
+    <div class="results-header">
+      <div>
+        <div class="results-title" id="resultsTitle">Resultados</div>
+        <div class="results-meta" id="resultsMeta"></div>
+      </div>
+    </div>
+    <div id="hotelList"></div>
+  </div>
+
+</div>
+
+<!-- MODAL PRESUPUESTO -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <div class="modal-title">Generar presupuesto</div>
+    <div class="modal-sub">Hotel: <span class="modal-hotel-name" id="modalHotelName">—</span></div>
+
+    <div class="modal-field">
+      <label>Nombre del cliente</label>
+      <input type="text" id="clienteNombre" placeholder="Ej: Familia García" style="margin-top:6px" />
+    </div>
+
+    <div class="modal-field">
+      <label>Markup (%)</label>
+      <input type="number" id="markupPct" value="20" min="0" max="100" style="margin-top:6px" oninput="actualizarMarkup()" />
+    </div>
+
+    <div class="markup-display">
+      <div class="label">Precio de venta estimado</div>
+      <div class="value" id="precioVenta">—</div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn-generar" onclick="generarPresupuesto()">📄 Generar PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast">✅ Presupuesto generado correctamente</div>
+
+<script>
+// ─── DATOS DE EJEMPLO (se reemplazará con datos reales de los bots) ───
+const MOCK_DATA = {
+  "iberostar praia do forte": [
+    {
+      hotel: "Iberostar Selection Praia do Forte",
+      stars: 5,
+      location: "Praia do Forte, Bahía, Brasil",
+      habitaciones: [
+        { nombre: "Junior Suite", regimen: "Todo incluido", proveedor: "tucano", precioTotal: 2261.28, reembolsable: true },
+        { nombre: "Junior Suite", regimen: "Todo incluido", proveedor: "travelgea", precioTotal: 2389.40, reembolsable: true },
+        { nombre: "Junior Suite cerca de la piscina", regimen: "Todo incluido", proveedor: "tucano", precioTotal: 2490.00, reembolsable: true },
+        { nombre: "Junior Suite cerca de la piscina", regimen: "Todo incluido", proveedor: "travelgea", precioTotal: 2520.00, reembolsable: true },
+        { nombre: "Junior Suite vista lateral al mar", regimen: "Todo incluido", proveedor: "tucano", precioTotal: 2680.00, reembolsable: false },
+        { nombre: "Junior Suite vista lateral al mar", regimen: "Todo incluido", proveedor: "travelgea", precioTotal: 2710.00, reembolsable: true },
+        { nombre: "Junior Suite frente al mar", regimen: "Todo incluido", proveedor: "tucano", precioTotal: 2950.00, reembolsable: true },
+        { nombre: "Junior Suite frente al mar", regimen: "Todo incluido", proveedor: "travelgea", precioTotal: 2980.00, reembolsable: false },
+      ]
+    }
+  ],
+  "punta cana": [
+    {
+      hotel: "Barceló Bávaro Palace",
+      stars: 5,
+      location: "Punta Cana, República Dominicana",
+      habitaciones: [
+        { nombre: "Habitación Superior", regimen: "Todo incluido", proveedor: "travelgea", precioTotal: 1820.00, reembolsable: true },
+        { nombre: "Habitación Superior", regimen: "Todo incluido", proveedor: "tucano", precioTotal: 1890.00, reembolsable: true },
+        { nombre: "Suite Junior", regimen: "Todo incluido", proveedor: "travelgea", precioTotal: 2180.00, reembolsable: true },
+        { nombre: "Suite Junior", regimen: "Todo incluido", proveedor: "tucano", precioTotal: 2240.00, reembolsable: false },
+      ]
+    }
+  ]
+};
+
+let currentHotelData = null;
+let currentNochesBusqueda = 7;
+
+// ─── BUSCAR ───
+async function buscar() {
+  const destino = document.getElementById('destino').value.trim();
+  if (!destino) { alert('Ingresá un destino'); return; }
+
+  const entrada = document.getElementById('entrada').value;
+  if (!entrada) { alert('Ingresá una fecha de entrada'); return; }
+
+  currentNochesBusqueda = parseInt(document.getElementById('noches').value);
+  const adultos = document.getElementById('adultos').value;
+
+  // Mostrar loading
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('results').classList.remove('visible');
+  document.getElementById('loading').classList.add('visible');
+
+  // Animación de pasos
+  const steps = ['step1','step2','step3'];
+  steps.forEach((s,i) => {
+    document.getElementById(s).classList.remove('active','done');
+    setTimeout(() => {
+      document.getElementById(s).classList.add('active');
+      if (i > 0) document.getElementById(steps[i-1]).classList.replace('active','done');
+    }, i * 1200);
+  });
+
+  try {
+    const resp = await fetch('/buscar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ destino, entrada, noches: currentNochesBusqueda, adultos: parseInt(adultos) })
+    });
+
+    const data = await resp.json();
+
+    document.getElementById('loading').classList.remove('visible');
+
+    if (data.ok && data.resultados.length > 0) {
+      mostrarResultados(destino, entrada, adultos, data.resultados);
+    } else {
+      document.getElementById('emptyState').style.display = 'block';
+      document.getElementById('emptyState').querySelector('.empty-text').textContent = 'No se encontraron resultados para esta búsqueda';
+    }
+  } catch (err) {
+    document.getElementById('loading').classList.remove('visible');
+    document.getElementById('emptyState').style.display = 'block';
+    document.getElementById('emptyState').querySelector('.empty-text').textContent = 'Error al conectar con los proveedores';
+  }
+}
+
+// ─── MOSTRAR RESULTADOS ───
+function mostrarResultados(destino, entrada, adultos, hotelesData) {
+  const hoteles = hotelesData;
+
+  const noches = currentNochesBusqueda;
+
+  // Calcular precios netos
+  hoteles.forEach(hotel => {
+    hotel.habitaciones.forEach(hab => {
+      if (hab.proveedor === 'tucano') {
+        hab.precioNeto = hab.precioTotal * 0.83;
+      } else if (hab.proveedor === 'travelgea') {
+        hab.precioNeto = hab.precioTotal * 0.88;
+      } else {
+        hab.precioNeto = hab.precioTotal; // TBO ya es neto
+      }
+    });
+
+    // Ordenar de más barato a más caro (por neto)
+    hotel.habitaciones.sort((a, b) => a.precioNeto - b.precioNeto);
+  });
+
+  // Título
+  let fechaStr = '';
+  if (entrada) {
+    const d = new Date(entrada + 'T00:00:00');
+    const salida = new Date(d); salida.setDate(salida.getDate() + noches);
+    const fmt = dt => dt.toLocaleDateString('es-AR', {day:'2-digit', month:'2-digit'});
+    fechaStr = ` · ${fmt(d)} → ${fmt(salida)} (${noches} noches)`;
+  }
+
+  document.getElementById('resultsTitle').textContent = destino;
+  document.getElementById('resultsMeta').textContent = `${adultos} adulto${adultos>1?'s':''} · ${noches} noches${fechaStr}`;
+
+  // Render hoteles
+  const container = document.getElementById('hotelList');
+  container.innerHTML = '';
+
+  hoteles.forEach((hotel, hi) => {
+    const minNeto = Math.min(...hotel.habitaciones.map(h => h.precioNeto));
+    const minNetoPorPax = minNeto / parseInt(adultos);
+
+    const card = document.createElement('div');
+    card.className = 'hotel-card';
+
+    const starsHTML = '★'.repeat(hotel.stars);
+
+    let rowsHTML = '';
+    hotel.habitaciones.forEach((hab, i) => {
+      const esMasBa = (hab.precioNeto === minNeto);
+      rowsHTML += `
+        <tr class="${esMasBa ? 'cheapest-row' : ''}">
+          <td>
+            <div class="room-name">
+              ${hab.nombre}
+              ${esMasBa ? '<span class="cheapest-badge">⬇ más económico</span>' : ''}
+            </div>
+            <div class="room-regime">${hab.regimen}</div>
+            ${hab.reembolsable ? '<div class="refundable">✓ Reembolsable</div>' : ''}
+          </td>
+          <td><span class="provider-tag ${hab.proveedor}">${hab.proveedor === 'tucano' ? 'Tucano' : hab.proveedor === 'travelgea' ? 'Travelgea' : 'TBO'}</span></td>
+          <td>
+            <div class="price-neto">USD ${fmt(hab.precioNeto)}</div>
+            <div class="price-original">Bruto: USD ${fmt(hab.precioTotal)}</div>
+          </td>
+        </tr>
+      `;
+    });
+
+    card.innerHTML = `
+      <div class="hotel-header">
+        <div>
+          <div class="hotel-name">${hotel.hotel}</div>
+          <div class="hotel-stars">${starsHTML}</div>
+          <div class="hotel-location">📍 ${hotel.location}</div>
+        </div>
+        <div class="hotel-best-price">
+          <div class="best-price-label">Mejor precio neto</div>
+          <div class="best-price-value">USD ${fmt(minNeto)}</div>
+          <div class="best-price-per">USD ${fmt(minNetoPorPax)} / pax</div>
+        </div>
+      </div>
+      <table class="rooms-table">
+        <thead>
+          <tr>
+            <th>Habitación</th>
+            <th>Proveedor</th>
+            <th style="text-align:right">Precio neto (total estadía)</th>
+          </tr>
+        </thead>
+        <tbody>${rowsHTML}</tbody>
+      </table>
+      <div class="budget-row">
+        <button class="btn-presupuesto" onclick='abrirModal(${hi})'>
+          📄 Generar presupuesto
+        </button>
+      </div>
+    `;
+
+    container.appendChild(card);
+  });
+
+  currentHotelData = hoteles;
+  document.getElementById('results').classList.add('visible');
+}
+
+// ─── MODAL ───
+let currentHotelIdx = 0;
+
+function abrirModal(idx) {
+  currentHotelIdx = idx;
+  const hotel = currentHotelData[idx];
+  document.getElementById('modalHotelName').textContent = hotel.hotel;
+  actualizarMarkup();
+  document.getElementById('modalOverlay').classList.add('visible');
+}
+
+function cerrarModal() {
+  document.getElementById('modalOverlay').classList.remove('visible');
+}
+
+function actualizarMarkup() {
+  const hotel = currentHotelData ? currentHotelData[currentHotelIdx] : null;
+  if (!hotel) return;
+  const markup = parseFloat(document.getElementById('markupPct').value) || 0;
+  const minNeto = Math.min(...hotel.habitaciones.map(h => h.precioNeto));
+  const venta = minNeto * (1 + markup / 100);
+  document.getElementById('precioVenta').textContent = 'USD ' + fmt(venta);
+}
+
+function generarPresupuesto() {
+  cerrarModal();
+  const toast = document.getElementById('toast');
+  toast.classList.add('visible');
+  setTimeout(() => toast.classList.remove('visible'), 3000);
+  // Aquí se conectará la generación de PDF
+}
+
+// ─── HELPERS ───
+function fmt(n) {
+  return n.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function generarMockGenerico(destino) {
+  return [{
+    hotel: destino,
+    stars: 5,
+    location: "Destino buscado",
+    habitaciones: [
+      { nombre: "Habitación Estándar", regimen: "Solo alojamiento", proveedor: "tucano", precioTotal: 1200, reembolsable: true },
+      { nombre: "Habitación Estándar", regimen: "Solo alojamiento", proveedor: "travelgea", precioTotal: 1180, reembolsable: true },
+    ]
+  }];
+}
+
+// Cerrar modal al hacer click fuera
+document.getElementById('modalOverlay').addEventListener('click', function(e) {
+  if (e.target === this) cerrarModal();
+});
+
+// Enter para buscar
+document.getElementById('destino').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') buscar();
+});
+</script>
+</body>
+</html>
