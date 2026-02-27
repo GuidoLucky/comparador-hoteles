@@ -4,11 +4,10 @@ nixPkgs = ["nodejs_20"]
 [phases.install]
 cmds = [
   "npm install",
-  "npx playwright install chromium",
+  "PLAYWRIGHT_BROWSERS_PATH=/app/browsers npx playwright install chromium",
   "npx playwright install-deps chromium",
-  "find /root/.cache/ms-playwright -name 'chrome' -o -name 'chromium' 2>/dev/null | head -10 || echo 'No chromium binary found'",
-  "ls /root/.cache/ms-playwright/ 2>/dev/null || echo 'No ms-playwright cache'"
+  "find /app/browsers -name 'chrome' 2>/dev/null | head -5 || echo 'not found'"
 ]
 
 [start]
-cmd = "npm start"
+cmd = "PLAYWRIGHT_BROWSERS_PATH=/app/browsers npm start"
