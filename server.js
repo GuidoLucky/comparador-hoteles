@@ -1,5 +1,5 @@
 const express = require('express');
-const { chromium } = require('playwright');
+const { chromium } = require('playwright-core');
 const path = require('path');
 
 const app = express();
@@ -40,6 +40,7 @@ app.post('/buscar', async (req, res) => {
 async function buscarTucano(destino, entrada, noches, adultos) {
   console.log('[Tucano] Iniciando...');
   const browser = await chromium.launch({
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
   });
@@ -164,6 +165,7 @@ async function extraerTucano(page) {
 async function buscarTravelgea(destino, entrada, noches, adultos) {
   console.log('[Travelgea] Iniciando...');
   const browser = await chromium.launch({
+    executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
   });
