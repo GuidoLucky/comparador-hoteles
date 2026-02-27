@@ -17,16 +17,12 @@ const TRAVELGEA_PASS = process.env.TRAVELGEA_PASS;
 // Detectar Chromium del sistema
 function getChromiumPath() {
   const { execSync } = require('child_process');
-  // Buscar en /app/browsers primero (ruta configurada en Railway)
+  // /app/pw-browsers es donde lo instalamos en el build
   try {
-    const result = execSync('find /app/browsers -name "chrome" -type f 2>/dev/null | head -1').toString().trim();
-    if (result) return result;
+    const result = execSync('find /app/pw-browsers -name "chrome" -type f 2>/dev/null | head -1').toString().trim();
+    if (result) { console.log("Chromium encontrado en:", result); return result; }
   } catch(e) {}
-  // Fallback a playwright default
-  try {
-    const playwrightPath = require("playwright").chromium.executablePath();
-    return playwrightPath;
-  } catch(e) {}
+  console.log("Chromium no encontrado en /app/pw-browsers");
   return null;
 }
 
