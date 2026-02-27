@@ -2,7 +2,11 @@
 nixPkgs = ["nodejs_20"]
 
 [phases.install]
-cmds = ["npm install", "npx playwright install chromium", "npx playwright install-deps chromium"]
+cmds = [
+  "npm install",
+  "npx playwright install chromium",
+  "npx playwright install-deps chromium"
+]
 
 [start]
 cmd = "npm start"
