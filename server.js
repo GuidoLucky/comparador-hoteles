@@ -14,6 +14,44 @@ const TRAVELGEA_PASS = process.env.TRAVELGEA_PASS;
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 
+app.get('/debug-tucano', async (req, res) => {
+  if (!BROWSERLESS_TOKEN) return res.json({ error: 'No token' });
+  try {
+    const browser = await getBrowser();
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.goto('https://www.tucanotours.com.ar/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(2000);
+    // Abrir dropdown login
+    await page.click('a.reg-large.reg-btn24').catch(() => {});
+    await page.waitForTimeout(1000);
+    const html = await page.content();
+    await browser.close();
+    // Extraer solo el form de login
+    const match = html.match(/form[^>]*form_login[^>]*>[\s\S]{0,2000}/);
+    res.json({ ok: true, loginForm: match ? match[0] : 'No encontrado', url: page.url() });
+  } catch(e) {
+    res.json({ error: e.message });
+  }
+});
+
+app.get('/debug-travelgea', async (req, res) => {
+  if (!BROWSERLESS_TOKEN) return res.json({ error: 'No token' });
+  try {
+    const browser = await getBrowser();
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.goto('https://intranet.grupogea.la/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(2000);
+    const html = await page.content();
+    await browser.close();
+    const match = html.match(/<form[\s\S]{0,3000}/);
+    res.json({ ok: true, form: match ? match[0].substring(0, 2000) : 'No encontrado' });
+  } catch(e) {
+    res.json({ error: e.message });
+  }
+});
+
 app.get('/health', (req, res) => res.json({ 
   ok: true, 
   browserless: !!BROWSERLESS_TOKEN,
