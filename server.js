@@ -235,4 +235,13 @@ function combinarResultados(tucano, travelgea) {
   return Object.values(mapa);
 }
 
+// Dar permisos de ejecución al binario de Chromium al arrancar
+const { execSync } = require('child_process');
+try {
+  execSync('chmod +x /root/.cache/ms-playwright/chromium-1208/chrome-linux64/chrome');
+  console.log('✅ Permisos de Chromium configurados');
+} catch(e) {
+  console.log('⚠️ No se pudieron configurar permisos:', e.message);
+}
+
 app.listen(PORT, () => console.log(`✅ Servidor corriendo en puerto ${PORT}`));
