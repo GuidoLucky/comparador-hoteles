@@ -1,8 +1,8 @@
 [phases.setup]
-nixPkgs = ["nodejs_20", "chromium"]
+nixPkgs = ["nodejs_20", "chromium", "nss", "at-spi2-atk", "atk", "cups", "xorg.libXcomposite", "xorg.libXdamage", "xorg.libXext", "xorg.libXrandr", "libgbm", "alsa-lib", "pango", "cairo"]
 
 [phases.install]
 cmds = ["npm install"]
 
 [start]
-cmd = "PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=$(which chromium) npm start"
+cmd = "npm start"
