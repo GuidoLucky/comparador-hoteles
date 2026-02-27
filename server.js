@@ -56,7 +56,12 @@ app.get('/', (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-  res.json({ ok: true, chromium: CHROMIUM_PATH });
+  const { execSync } = require('child_process');
+  const diag = {};
+  ['which chromium', 'which chromium-browser', 'find /nix/store -name chromium -type f 2>/dev/null | head -3', 'find /usr/bin -name chromium* 2>/dev/null | head -3'].forEach(cmd => {
+    try { diag[cmd] = execSync(cmd, {timeout:3000}).toString().trim(); } catch(e) { diag[cmd] = 'not found'; }
+  });
+  res.json({ ok: true, chromium: CHROMIUM_PATH, diag });
 });
 
 app.post('/buscar', async (req, res) => {
