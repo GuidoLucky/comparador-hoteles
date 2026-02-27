@@ -16,9 +16,18 @@ const TRAVELGEA_PASS = process.env.TRAVELGEA_PASS;
 
 // Detectar Chromium del sistema
 function getChromiumPath() {
-  // Playwright instala en esta ruta por defecto
-  const playwrightPath = require('playwright').chromium.executablePath();
-  return playwrightPath;
+  const { execSync } = require('child_process');
+  // Buscar en /app/browsers primero (ruta configurada en Railway)
+  try {
+    const result = execSync('find /app/browsers -name "chrome" -type f 2>/dev/null | head -1').toString().trim();
+    if (result) return result;
+  } catch(e) {}
+  // Fallback a playwright default
+  try {
+    const playwrightPath = require("playwright").chromium.executablePath();
+    return playwrightPath;
+  } catch(e) {}
+  return null;
 }
 
 const CHROMIUM_PATH = getChromiumPath();
