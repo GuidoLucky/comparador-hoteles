@@ -13,6 +13,28 @@ const TRAVELGEA_USER = process.env.TRAVELGEA_USER;
 const TRAVELGEA_PASS = process.env.TRAVELGEA_PASS;
 
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+app.get('/debug-portal', async (req, res) => {
+  if (!BROWSERLESS_TOKEN) return res.json({ error: 'No token' });
+  try {
+    const browser = await getBrowser();
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.goto('https://intranet.grupogea.la/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(3000);
+    await page.fill('input[name="user"]', TRAVELGEA_USER);
+    await page.fill('input[name="pass"]', TRAVELGEA_PASS);
+    await page.click('button[type="submit"]');
+    await page.waitForTimeout(4000);
+    await page.goto('https://online.travelgea.com.ar/es', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(5000);
+    const html = await page.content();
+    await browser.close();
+    // Buscar inputs en el HTML
+    const inputs = html.match(/<input[^>]{0,200}>/g) || [];
+    res.json({ url: page.url(), inputs: inputs.slice(0, 20) });
+  } catch(e) { res.json({ error: e.message }); }
+});
+
 app.get('/health', (req, res) => res.json({ ok: true, browserless: !!BROWSERLESS_TOKEN, tucano: !!TUCANO_USER, travelgea: !!TRAVELGEA_USER }));
 
 app.post('/buscar', async (req, res) => {
@@ -61,57 +83,58 @@ async function buscarTucano(destino, entrada, noches, adultos) {
     await page.waitForTimeout(2000);
     console.log('[Tucano] Login OK:', page.url());
 
-    // 2. Click en Hoteles y Servicios — abre PriceNavigator en nueva pestaña
-    const [newPage] = await Promise.all([
-      context.waitForEvent('page', { timeout: 10000 }),
-      page.click('a#reservas')
-    ]);
-    await newPage.waitForLoadState('domcontentloaded');
-    await newPage.waitForTimeout(3000);
-    console.log('[Tucano] PriceNavigator:', newPage.url());
+    // 2. Obtener URL de autologin de PriceNavigator
+    console.log('[Tucano] Obteniendo URL de autologin...');
+    const href = await page.evaluate(() => {
+      const link = document.querySelector('a#reservas');
+      return link ? link.getAttribute('href') : null;
+    });
+    console.log('[Tucano] href reservas:', href);
+    
+    // Navegar al PriceNavigator en la misma pestaña
+    await page.goto('https://tucanotours.app.pricenavigator.net/#!/hotel', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.waitForTimeout(4000);
+    console.log('[Tucano] PriceNavigator:', page.url());
 
-    // 3. Si pide login en PriceNavigator
-    if (newPage.url().includes('login')) {
-      console.log('[Tucano] PriceNavigator pide login...');
-      // Las credenciales de PriceNavigator son distintas — 
-      // intentar con las mismas primero como fallback
-      await newPage.fill('input[name="email"], input[type="email"]', TUCANO_USER).catch(() => {});
-      await newPage.fill('input[type="password"]', TUCANO_PASS).catch(() => {});
-      await newPage.click('button[type="submit"]').catch(() => {});
-      await newPage.waitForTimeout(3000);
-      console.log('[Tucano] Post-login PN:', newPage.url());
+    // 3. Si pide login, navegar via el link de autologin
+    if (page.url().includes('login')) {
+      console.log('[Tucano] Volviendo a tucanotours para autologin...');
+      await page.goto('https://www.tucanotours.com.ar/', { waitUntil: 'domcontentloaded' });
+      await page.waitForTimeout(2000);
+      // Navegar al link de reservas que tiene el token de autologin
+      await page.evaluate(() => {
+        const link = document.querySelector('a#reservas');
+        if (link) link.target = '_self'; // forzar misma pestaña
+      });
+      await page.click('a#reservas');
+      await page.waitForTimeout(5000);
+      console.log('[Tucano] Post-autologin:', page.url());
     }
 
-    // 4. Asegurarse de estar en la sección hoteles
-    if (!newPage.url().includes('hotel')) {
-      await newPage.goto('https://tucanotours.app.pricenavigator.net/#!/hotel', { waitUntil: 'domcontentloaded' });
-      await newPage.waitForTimeout(2000);
-    }
-
-    // 5. Buscar destino
-    await newPage.waitForSelector('input[placeholder*="ciudad"]', { timeout: 10000 });
-    await newPage.click('input[placeholder*="ciudad"]');
-    await newPage.type('input[placeholder*="ciudad"]', destino, { delay: 80 });
-    await newPage.waitForSelector('ul.ui-autocomplete li.ui-menu-item', { timeout: 8000 });
-    await newPage.waitForTimeout(500);
-    await newPage.locator('ul.ui-autocomplete li.ui-menu-item').first().click();
-    await newPage.waitForTimeout(800);
+    // 4. Buscar destino
+    await page.waitForSelector('input[placeholder*="ciudad"]', { timeout: 10000 });
+    await page.click('input[placeholder*="ciudad"]');
+    await page.type('input[placeholder*="ciudad"]', destino, { delay: 80 });
+    await page.waitForSelector('ul.ui-autocomplete li.ui-menu-item', { timeout: 8000 });
+    await page.waitForTimeout(500);
+    await page.locator('ul.ui-autocomplete li.ui-menu-item').first().click();
+    await page.waitForTimeout(800);
     console.log('[Tucano] Destino seleccionado');
 
-    // 6. Fecha y noches
+    // 5. Fecha y noches
     const [yyyy, mm, dd] = entrada.split('-');
-    await newPage.fill('input[placeholder="Entrada"]', `${dd}/${mm}/${yyyy}`).catch(() => {});
-    await newPage.keyboard.press('Tab');
-    await newPage.waitForTimeout(300);
-    await newPage.fill('input[placeholder="Noches"]', String(noches)).catch(() => {});
-    await newPage.waitForTimeout(300);
+    await page.fill('input[placeholder="Entrada"]', `${dd}/${mm}/${yyyy}`).catch(() => {});
+    await page.keyboard.press('Tab');
+    await page.waitForTimeout(300);
+    await page.fill('input[placeholder="Noches"]', String(noches)).catch(() => {});
+    await page.waitForTimeout(300);
 
-    // 7. Buscar
-    await newPage.click('button:has-text("Buscar")');
-    await newPage.waitForTimeout(8000);
-    console.log('[Tucano] Resultados URL:', newPage.url());
+    // 6. Buscar
+    await page.click('button:has-text("Buscar")');
+    await page.waitForTimeout(8000);
+    console.log('[Tucano] Resultados URL:', page.url());
 
-    const resultados = await extraerTucano(newPage);
+    const resultados = await extraerTucano(page);
     console.log('[Tucano] Hoteles:', resultados.length);
     await browser.close();
     return resultados;
