@@ -2,11 +2,7 @@
 nixPkgs = ["nodejs_20"]
 
 [phases.install]
-cmds = [
-  "npm install",
-  "PLAYWRIGHT_BROWSERS_PATH=/app/pw-browsers npx playwright install chromium",
-  "npx playwright install-deps chromium"
-]
+cmds = ["npm install"]
 
 [start]
-cmd = "PLAYWRIGHT_BROWSERS_PATH=/app/pw-browsers npm start"
+cmd = "npm start"
