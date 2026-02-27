@@ -109,7 +109,7 @@ async function buscarTucano(destino, entrada, noches, adultos) {
     await page.fill('form#form_login input[type="password"]', TUCANO_PASS);
     await Promise.all([
       page.waitForNavigation({ timeout: 15000 }).catch(() => {}),
-      page.click('form#form_login button[type="submit"]')
+      page.click('button#login_submit')
     ]);
     await page.waitForTimeout(2000);
     console.log('[Tucano] Login OK:', page.url());
@@ -217,9 +217,9 @@ async function buscarTravelgea(destino, entrada, noches, adultos) {
     // 1. Login intranet
     await page.goto('https://intranet.grupogea.la/', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(3000);
-    await page.fill('input[placeholder="Usuario"]', TRAVELGEA_USER);
-    await page.fill('input[placeholder="Contraseña"], input[type="password"]', TRAVELGEA_PASS);
-    await page.click('button:has-text("Iniciar sesión"), button[type="submit"]');
+    await page.fill('input[name="user"]', TRAVELGEA_USER);
+    await page.fill('input[name="pass"]', TRAVELGEA_PASS);
+    await page.click('button[type="submit"]');
     await page.waitForTimeout(4000);
     console.log('[Travelgea] Login OK:', page.url());
 
