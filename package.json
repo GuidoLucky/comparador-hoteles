@@ -1,14 +1,13 @@
 {
   "name": "comparador-hoteles",
   "version": "1.0.0",
-  "description": "Comparador de precios de hoteles para Lucky Tour",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "playwright-core": "^1.40.0"
+    "playwright": "^1.40.0"
   },
   "engines": {
     "node": ">=18.0.0"
