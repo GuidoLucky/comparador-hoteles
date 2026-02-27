@@ -21,25 +21,19 @@ app.post('/buscar', async (req, res) => {
   const { destino, entrada, noches, adultos } = req.body;
   console.log(`[Búsqueda] destino="${destino}" entrada="${entrada}" noches=${noches} adultos=${adultos}`);
 
-  if (!destino || !entrada || !noches || !adultos) {
-    return res.status(400).json({ error: 'Faltan parámetros' });
-  }
-
-  const [resultadosTucano, resultadosTravelgea] = await Promise.allSettled([
+  const [resTucano, resTravelgea] = await Promise.allSettled([
     buscarTucano(destino, entrada, parseInt(noches), parseInt(adultos)),
     buscarTravelgea(destino, entrada, parseInt(noches), parseInt(adultos))
   ]);
 
-  const tucano = resultadosTucano.status === 'fulfilled' ? resultadosTucano.value : [];
-  const travelgea = resultadosTravelgea.status === 'fulfilled' ? resultadosTravelgea.value : [];
+  const tucano = resTucano.status === 'fulfilled' ? resTucano.value : [];
+  const travelgea = resTravelgea.status === 'fulfilled' ? resTravelgea.value : [];
 
-  if (resultadosTucano.status === 'rejected') console.error('[Tucano] Error:', resultadosTucano.reason);
-  if (resultadosTravelgea.status === 'rejected') console.error('[Travelgea] Error:', resultadosTravelgea.reason);
+  if (resTucano.status === 'rejected') console.error('[Tucano] Falló:', resTucano.reason?.message);
+  if (resTravelgea.status === 'rejected') console.error('[Travelgea] Falló:', resTravelgea.reason?.message);
 
-  console.log(`[Resultados] Tucano: ${tucano.length} hoteles, Travelgea: ${travelgea.length} hoteles`);
-
-  const resultados = combinarResultados(tucano, travelgea);
-  res.json({ ok: true, resultados });
+  console.log(`[Resultados] Tucano: ${tucano.length}, Travelgea: ${travelgea.length}`);
+  res.json({ ok: true, resultados: combinarResultados(tucano, travelgea) });
 });
 
 // ─── BOT TUCANO ───
@@ -49,77 +43,85 @@ async function buscarTucano(destino, entrada, noches, adultos) {
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
   });
-  const context = await browser.newContext({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' });
-  const page = await context.newPage();
+  const page = await (await browser.newContext({
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
+  })).newPage();
 
   try {
-    // Login
-    console.log('[Tucano] Haciendo login...');
+    // 1. Login tucanotours.com.ar
+    console.log('[Tucano] Login...');
     await page.goto('https://www.tucanotours.com.ar/index.php', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(2000);
-
     await page.fill('input[name="usuario"]', TUCANO_USER);
     await page.fill('input[name="password"]', TUCANO_PASS);
-    await page.click('button[type="submit"], input[type="submit"], .btn-login, button:has-text("Iniciar")');
-    await page.waitForTimeout(3000);
-    console.log('[Tucano] Login OK, URL:', page.url());
+    await Promise.all([
+      page.waitForNavigation({ timeout: 15000 }).catch(() => {}),
+      page.click('button[type="submit"], input[type="submit"]')
+    ]);
+    await page.waitForTimeout(2000);
+    console.log('[Tucano] Post-login:', page.url());
 
-    // Ir a PriceNavigator
+    // 2. Ir a PriceNavigator
     await page.goto('https://tucanotours.app.pricenavigator.net/', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(3000);
-    console.log('[Tucano] PriceNavigator URL:', page.url());
+    console.log('[Tucano] PriceNavigator:', page.url());
 
-    // Si redirige a login de PriceNavigator, loguearse también
+    // 3. Si pide login en PriceNavigator
     if (page.url().includes('login')) {
-      console.log('[Tucano] Login en PriceNavigator...');
-      await page.fill('input[name="username"], input[type="email"], input[placeholder*="usuario"]', TUCANO_USER);
+      console.log('[Tucano] Login PriceNavigator...');
+      await page.fill('input[name="username"], input[type="email"]', TUCANO_USER);
       await page.fill('input[type="password"]', TUCANO_PASS);
-      await page.click('button[type="submit"], button:has-text("Ingresar")');
+      await page.click('button[type="submit"]');
       await page.waitForTimeout(3000);
     }
 
-    // Click en Hoteles
-    await page.click('text=Hoteles').catch(() => console.log('[Tucano] No encontré tab Hoteles'));
+    // 4. Click en tab Hoteles
+    await page.click('a[href*="hotel"], li:has-text("Hoteles"), .nav-item:has-text("Hoteles")').catch(() => {});
     await page.waitForTimeout(1500);
 
-    // Campo destino
-    const inputDestino = page.locator('input[placeholder*="ciudad"], input[placeholder*="hotel"], input[placeholder*="interés"], input[placeholder*="destino"]').first();
-    await inputDestino.fill(destino);
-    await page.waitForTimeout(1500);
+    // 5. Autocomplete destino — selector exacto de jQuery UI
+    const inputDestino = page.locator('input.ui-autocomplete-input, input[placeholder*="ciudad"], input[placeholder*="hotel"]').first();
+    await inputDestino.click();
+    await inputDestino.fill('');
+    await inputDestino.type(destino, { delay: 80 });
+    console.log('[Tucano] Escribiendo destino, esperando sugerencias...');
 
-    // Seleccionar sugerencia
-    const sugerencia = page.locator('[class*="suggestion"], [class*="autocomplete"], [class*="item"]').first();
-    if (await sugerencia.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await sugerencia.click();
-      await page.waitForTimeout(500);
+    // 6. Esperar que aparezca el autocomplete ul#ui-id-1
+    await page.waitForSelector('ul.ui-autocomplete.ui-front li.ui-menu-item', { timeout: 8000 });
+    await page.waitForTimeout(500);
+
+    // 7. Click en primera sugerencia visible
+    const sugerencias = page.locator('ul.ui-autocomplete.ui-front li.ui-menu-item');
+    const count = await sugerencias.count();
+    console.log('[Tucano] Sugerencias encontradas:', count);
+    if (count > 0) {
+      await sugerencias.first().click();
+      await page.waitForTimeout(800);
     }
 
-    // Fecha
+    // 8. Fecha entrada
     const [yyyy, mm, dd] = entrada.split('-');
-    const fechaTucano = `${dd}/${mm}/${yyyy}`;
-    await page.fill('input[placeholder="Entrada"]', fechaTucano).catch(() => {});
-    await page.waitForTimeout(300);
+    await page.fill('input[placeholder="Entrada"], input[name*="entrada"]', `${dd}/${mm}/${yyyy}`).catch(() => {});
+    await page.waitForTimeout(400);
 
-    // Noches
-    await page.fill('input[placeholder="Noches"]', noches.toString()).catch(() => {});
-    await page.waitForTimeout(300);
+    // 9. Noches
+    await page.fill('input[placeholder="Noches"], input[name*="noches"]', String(noches)).catch(() => {});
+    await page.waitForTimeout(400);
 
-    // Buscar
-    await page.click('button:has-text("Buscar"), .buscar, [class*="search-btn"]');
-    await page.waitForTimeout(5000);
-
-    console.log('[Tucano] Extrayendo resultados, URL:', page.url());
-    const html = await page.content();
-    console.log('[Tucano] HTML length:', html.length);
+    // 10. Buscar
+    await page.click('button:has-text("Buscar")');
+    await page.waitForTimeout(6000);
+    console.log('[Tucano] Resultados URL:', page.url());
 
     const resultados = await extraerTucano(page);
-    console.log('[Tucano] Hoteles encontrados:', resultados.length);
-
+    console.log('[Tucano] Hoteles:', resultados.length);
     await browser.close();
     return resultados;
 
   } catch (err) {
     console.error('[Tucano] Error:', err.message);
+    // Screenshot para debug
+    await page.screenshot({ path: '/tmp/tucano-error.png' }).catch(() => {});
     await browser.close();
     return [];
   }
@@ -128,29 +130,28 @@ async function buscarTucano(destino, entrada, noches, adultos) {
 async function extraerTucano(page) {
   return await page.evaluate(() => {
     const hoteles = [];
-    const cards = document.querySelectorAll('[class*="hotel-card"], [class*="property-card"], [class*="hotel-item"], [class*="result-item"]');
-    console.log('Tucano cards encontradas:', cards.length);
+    // PriceNavigator muestra hotel con clase hotel-card o similar
+    const cards = document.querySelectorAll('[class*="hotel-card"], [class*="hotel-item"], [class*="property"]');
+    console.log('Tucano: cards encontradas =', cards.length);
 
     cards.forEach(card => {
-      const nombre = card.querySelector('h2, h3, [class*="hotel-name"], [class*="property-name"]')?.textContent?.trim();
+      const nombre = card.querySelector('h2, h3, [class*="hotel-name"], [class*="name"]')?.textContent?.trim();
       const habitaciones = [];
 
-      const tarifas = card.querySelectorAll('[class*="room"], [class*="tariff"], [class*="rate"]');
-      tarifas.forEach(t => {
-        const nombreHab = t.querySelector('[class*="room-name"], [class*="type"]')?.textContent?.trim();
-        const regimen = t.querySelector('[class*="regime"], [class*="board"], a')?.textContent?.trim() || 'Todo incluido';
-        const precioText = t.querySelector('[class*="price"], [class*="amount"]')?.textContent?.replace(/[^0-9.,]/g, '') || '';
-        const precio = parseFloat(precioText.replace(',', '.'));
+      card.querySelectorAll('[class*="room"], [class*="tariff"], [class*="rate"], [class*="hab"]').forEach(row => {
+        const nombreHab = row.querySelector('[class*="name"], [class*="type"], [class*="room-type"]')?.textContent?.trim();
+        const regimen = row.querySelector('[class*="regime"], [class*="board"], a')?.textContent?.trim() || 'Todo incluido';
+        const precioText = (row.querySelector('[class*="price"], [class*="amount"], [class*="total"]')?.textContent || '').replace(/[^0-9.,]/g, '').replace(',', '.');
+        const precio = parseFloat(precioText);
         if (nombreHab && !isNaN(precio) && precio > 0) {
-          habitaciones.push({ nombre: nombreHab, regimen, precioTotal: precio, reembolsable: t.textContent.includes('eembolsable') });
+          habitaciones.push({ nombre: nombreHab, regimen, precioTotal: precio, reembolsable: row.textContent.includes('eembolsable') });
         }
       });
 
+      // Fallback precio general
       if (!habitaciones.length) {
-        const p = card.querySelector('[class*="price"], [class*="amount"], [class*="total"]');
-        const t = p?.textContent?.replace(/[^0-9.,]/g, '') || '';
-        const precio = parseFloat(t.replace(',', '.'));
-        if (precio > 0) habitaciones.push({ nombre: 'Habitación disponible', regimen: 'Consultar', precioTotal: precio, reembolsable: false });
+        const p = parseFloat((card.querySelector('[class*="price"], [class*="amount"]')?.textContent || '').replace(/[^0-9.,]/g, '').replace(',', '.'));
+        if (p > 0) habitaciones.push({ nombre: 'Habitación disponible', regimen: 'Consultar', precioTotal: p, reembolsable: false });
       }
 
       if (nombre && habitaciones.length) hoteles.push({ hotel: nombre, estrellas: 5, habitaciones });
@@ -166,63 +167,73 @@ async function buscarTravelgea(destino, entrada, noches, adultos) {
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage']
   });
-  const context = await browser.newContext({ userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' });
-  const page = await context.newPage();
+  const page = await (await browser.newContext({
+    userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36'
+  })).newPage();
 
   try {
-    console.log('[Travelgea] Haciendo login...');
+    // 1. Login intranet
+    console.log('[Travelgea] Login intranet...');
     await page.goto('https://intranet.grupogea.la/', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(3000);
 
-    // Login React app
-    await page.fill('input[type="email"], input[name="email"], input[placeholder*="mail"], input[placeholder*="usuario"]', TRAVELGEA_USER);
+    await page.fill('input[type="email"], input[name="email"], input[placeholder*="mail"], input[placeholder*="suar"]', TRAVELGEA_USER);
     await page.fill('input[type="password"]', TRAVELGEA_PASS);
     await page.click('button[type="submit"], button:has-text("Ingresar"), button:has-text("Iniciar")');
     await page.waitForTimeout(4000);
-    console.log('[Travelgea] Post-login URL:', page.url());
+    console.log('[Travelgea] Post-login:', page.url());
 
-    // Ir al portal
-    await page.goto('https://online.travelgea.com.ar/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    // 2. Ir a online.travelgea
+    await page.goto('https://online.travelgea.com.ar/es', { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForTimeout(3000);
-    console.log('[Travelgea] Portal URL:', page.url());
+    console.log('[Travelgea] Portal:', page.url());
 
-    // Destino
-    await page.fill('input[placeholder*="Destino"], input[placeholder*="hotel"], input[placeholder*="interés"]', destino);
-    await page.waitForTimeout(1500);
+    // 3. Autocomplete destino — mismo sistema jQuery UI
+    const inputDestino = page.locator('input.ui-autocomplete-input, input[placeholder*="Destino"], input[placeholder*="hotel"]').first();
+    await inputDestino.click();
+    await inputDestino.fill('');
+    await inputDestino.type(destino, { delay: 80 });
+    console.log('[Travelgea] Escribiendo destino, esperando sugerencias...');
 
-    const sug = page.locator('ul li, [class*="suggestion"], [class*="dropdown-item"]').first();
-    if (await sug.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await sug.click();
-      await page.waitForTimeout(500);
+    // 4. Esperar ul.ui-autocomplete li.ui-menu-item
+    await page.waitForSelector('ul.ui-autocomplete li.ui-menu-item', { timeout: 8000 });
+    await page.waitForTimeout(500);
+
+    const sugerencias = page.locator('ul.ui-autocomplete li.ui-menu-item');
+    const count = await sugerencias.count();
+    console.log('[Travelgea] Sugerencias:', count);
+    if (count > 0) {
+      await sugerencias.first().click();
+      await page.waitForTimeout(800);
     }
 
-    // Fecha llegada
+    // 5. Fecha llegada (formato dd-mm-yyyy)
     const [yyyy, mm, dd] = entrada.split('-');
-    const fechaTG = `${dd}-${mm}-${yyyy}`;
-    await page.fill('input[placeholder*="Llegada"], input[name*="llegada"]', fechaTG).catch(() => {});
+    const llegada = `${dd}-${mm}-${yyyy}`;
+    await page.fill('input[placeholder*="Llegada"], input[name*="llegada"], input[name*="checkin"]', llegada).catch(() => {});
+    await page.waitForTimeout(400);
 
-    // Noches (select)
-    await page.selectOption('select', noches.toString()).catch(async () => {
-      await page.fill('input[placeholder*="Noches"], input[name*="noches"]', noches.toString()).catch(() => {});
+    // 6. Noches (select)
+    await page.selectOption('select', String(noches)).catch(async () => {
+      await page.fill('input[placeholder*="Noches"]', String(noches)).catch(() => {});
     });
 
-    // Adultos
-    await page.selectOption('select[name*="adultos"]', adultos.toString()).catch(() => {});
+    // 7. Adultos
+    await page.selectOption('select[name*="adulto"], select:nth-of-type(2)', String(adultos)).catch(() => {});
 
-    // Buscar
+    // 8. Buscar
     await page.click('button:has-text("Buscar"), input[value="Buscar"]');
-    await page.waitForTimeout(6000);
-
-    console.log('[Travelgea] Extrayendo, URL:', page.url());
+    await page.waitForTimeout(7000);
+    console.log('[Travelgea] Resultados URL:', page.url());
 
     const resultados = await extraerTravelgea(page);
-    console.log('[Travelgea] Hoteles encontrados:', resultados.length);
-
+    console.log('[Travelgea] Hoteles:', resultados.length);
     await browser.close();
     return resultados;
 
   } catch (err) {
     console.error('[Travelgea] Error:', err.message);
+    await page.screenshot({ path: '/tmp/travelgea-error.png' }).catch(() => {});
     await browser.close();
     return [];
   }
@@ -231,27 +242,29 @@ async function buscarTravelgea(destino, entrada, noches, adultos) {
 async function extraerTravelgea(page) {
   return await page.evaluate(() => {
     const hoteles = [];
-    const cards = document.querySelectorAll('[class*="hotel"], [class*="property"], [class*="item-hotel"]');
+    const cards = document.querySelectorAll('[class*="hotel"], [class*="property"], [class*="item-result"]');
 
     cards.forEach(card => {
       const nombre = card.querySelector('h2, h3, [class*="name"], [class*="title"]')?.textContent?.trim();
       const habitaciones = [];
 
-      card.querySelectorAll('[class*="room"], [class*="option"], [class*="tarif"]').forEach(row => {
+      card.querySelectorAll('[class*="room"], [class*="option"], [class*="tarif"], [class*="rate"]').forEach(row => {
         const texto = row.textContent || '';
-        const tipoMatch = texto.match(/(\d+\s*x\s*)(.+?)(,|Todo)/);
-        const tipo = tipoMatch ? tipoMatch[2].trim() : null;
+        // "1 x Spa Premium, Todo incluido ... Precio USD 1,621.58"
+        const tipoMatch = texto.match(/\d+\s*x\s*(.+?)(?:,|Todo|Refund)/);
+        const tipo = tipoMatch ? tipoMatch[1].trim() : null;
         const regimen = row.querySelector('a')?.textContent?.trim() || 'Todo incluido';
         const precioMatch = texto.match(/Precio\s+USD\s*([\d,. ]+)/i);
         const precio = precioMatch ? parseFloat(precioMatch[1].replace(/[, ]/g, '')) : null;
-        if (tipo && precio) {
+        if (tipo && precio && precio > 0) {
           habitaciones.push({ nombre: tipo, regimen, precioTotal: precio, reembolsable: texto.toLowerCase().includes('reembolsable') });
         }
       });
 
+      // Fallback
       if (!habitaciones.length) {
-        const p = card.querySelector('[class*="price"], [class*="desde"], [class*="amount"]');
-        const precio = parseFloat((p?.textContent || '').replace(/[^0-9.]/g, ''));
+        const precioMatch = card.textContent?.match(/USD\s*([\d,. ]+)/);
+        const precio = precioMatch ? parseFloat(precioMatch[1].replace(/[, ]/g, '')) : null;
         if (precio > 0) habitaciones.push({ nombre: 'Habitación disponible', regimen: 'Consultar', precioTotal: precio, reembolsable: false });
       }
 
@@ -265,20 +278,16 @@ async function extraerTravelgea(page) {
 function combinarResultados(tucano, travelgea) {
   const mapa = {};
 
-  tucano.forEach(hotel => {
-    const key = hotel.hotel.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (!mapa[key]) mapa[key] = { hotel: hotel.hotel, estrellas: hotel.estrellas, habitaciones: [] };
-    hotel.habitaciones.forEach(h => {
-      mapa[key].habitaciones.push({ ...h, proveedor: 'tucano', precioNeto: parseFloat((h.precioTotal * 0.83).toFixed(2)) });
-    });
+  tucano.forEach(h => {
+    const key = h.hotel.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!mapa[key]) mapa[key] = { hotel: h.hotel, estrellas: h.estrellas, habitaciones: [] };
+    h.habitaciones.forEach(r => mapa[key].habitaciones.push({ ...r, proveedor: 'tucano', precioNeto: +(r.precioTotal * 0.83).toFixed(2) }));
   });
 
-  travelgea.forEach(hotel => {
-    const key = hotel.hotel.toLowerCase().replace(/[^a-z0-9]/g, '');
-    if (!mapa[key]) mapa[key] = { hotel: hotel.hotel, estrellas: hotel.estrellas, habitaciones: [] };
-    hotel.habitaciones.forEach(h => {
-      mapa[key].habitaciones.push({ ...h, proveedor: 'travelgea', precioNeto: parseFloat((h.precioTotal * 0.88).toFixed(2)) });
-    });
+  travelgea.forEach(h => {
+    const key = h.hotel.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (!mapa[key]) mapa[key] = { hotel: h.hotel, estrellas: h.estrellas, habitaciones: [] };
+    h.habitaciones.forEach(r => mapa[key].habitaciones.push({ ...r, proveedor: 'travelgea', precioNeto: +(r.precioTotal * 0.88).toFixed(2) }));
   });
 
   Object.values(mapa).forEach(h => h.habitaciones.sort((a, b) => a.precioNeto - b.precioNeto));
